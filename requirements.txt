@@ -1,2 +1,3 @@
 pyyaml
 psutil
+pytorch-lightning==0.7.6
