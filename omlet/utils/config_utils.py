@@ -4,11 +4,69 @@ import hydra
 import pkg_resources
 import fnmatch
 from omegaconf import OmegaConf, DictConfig
+from omegaconf.errors import OmegaConfBaseException
 from typing import Optional, List
+
+
+def _omlet_config_schema():
+    return OmegaConf.create({
+        'shorthand': {},
+        'override_name': {
+            'kv_sep': '=',
+            'item_sep': ',',
+            'use_shorthand': False,  # use shorthand names for override
+            'include_keys': None,
+            'exclude_keys': [],
+        },
+        'job': {},
+        '_internal': {
+            'is_initialized': False,
+        },
+    })
+
+
+def initialize_omlet_config(cfg: DictConfig):
+    """
+    See _omlet_config_schema()
+    """
+    assert isinstance(cfg, DictConfig)
+    OmegaConf.set_struct(cfg, False)
+    om = _omlet_config_schema()
+    om.update(cfg.get('omlet', {}))
+    cfg.omlet = om  # this is a copy operation
+    om = cfg.omlet
+
+    om._internal.is_initialized = True
+    assert is_omlet_initialized(cfg), 'INTERNAL'
+
+    # process shorthands
+    shortset = set()
+    for original, short in om.shorthand.items():
+        if short in shortset:
+            raise KeyError(f'Shorthand {short} is duplicated')
+        if short in cfg:
+            # user has already passed the short value
+            cfg[original] = cfg[short]  # create a redirection to short name
+            del cfg[short]
+        shortset.add(short)
+
+    om.job.override_name = omlet_override_name(cfg)
+    return cfg
+
+
+def print_config(cfg: DictConfig):
+    print(cfg.pretty(resolve=True))
 
 
 def is_hydra_initialized():
     return hydra.utils.HydraConfig().cfg is not None
+
+
+def is_omlet_initialized(cfg):
+    try:
+        return bool(cfg.omlet._internal.is_initialized)
+    except OmegaConfBaseException:
+        return False
 
 
 def hydra_config():
@@ -38,7 +96,14 @@ def _match_patterns(patterns: List[str], key: str):
     return False
 
 
-def hydra_override_name(cfg: Optional[DictConfig] = None) -> str:
+def hydra_override_name():
+    if is_hydra_initialized():
+        return hydra_config().job.override_dirname
+    else:
+        return ''
+
+
+def omlet_override_name(cfg: Optional[DictConfig]) -> str:
     """
     Command line overrides, e.g. "gpus=4,arch=resnet18"
 
@@ -53,26 +118,34 @@ def hydra_override_name(cfg: Optional[DictConfig] = None) -> str:
 
     `include_keys` takes precedence over `exclude_keys`
     """
-    if not is_hydra_initialized():
-        return ''
-
-    if cfg is None or cfg.get('omlet', {}).get('override_name', None) is None:
-        return hydra_config().job.override_dirname
+    assert is_hydra_initialized() and is_omlet_initialized(cfg)
 
     override_cfg = cfg.omlet.override_name
+    # cfg.omlet.shorthand maps original -> short
+    # build a reverse lookup for short -> original
+    longhand = {short: original for original, short in cfg.omlet.shorthand.items()}
     args = []
     for arg in hydra_override_arg_list():
         assert "=" in arg, f'INTERNAL ERROR: arg should contain "=": {arg}'
         key, value = arg.split('=', 1)
+        append = False
+        if key in longhand:  # key is a shorthand
+            key = longhand[key]
         # first check include list
-        if override_cfg.get('include_keys', None) is not None:
+        if override_cfg.include_keys is not None:
             if _match_patterns(override_cfg.include_keys, key):
-                args.append((key, value))
-        elif not _match_patterns(override_cfg.get('exclude_keys', []), key):
+                append = True
+        elif not _match_patterns(override_cfg.exclude_keys, key):
+            append = True
+
+        if append:
+            # key is always a longhand by now
+            if override_cfg.use_shorthand and key in cfg.omlet.shorthand:
+                key = cfg.omlet.shorthand[key]
             args.append((key, value))
     args.sort()
-    item_sep = override_cfg.get('item_sep', ',')
-    kv_sep = override_cfg.get('kv_sep', '=')
+    item_sep = override_cfg.item_sep
+    kv_sep = override_cfg.kv_sep
     return item_sep.join(f'{key}{kv_sep}{value}' for key, value in args)
 
 

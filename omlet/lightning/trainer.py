@@ -209,9 +209,9 @@ def hydra_trainer(pl_module_cls,
             override_name will be set to "lr=0.2_dropout=0.7"
             useful to configure your `run_name`
     """
+    U.initialize_omlet_config(cfg)
     U.set_os_envs(_DEFAULT_OS_ENVS)
     U.set_os_envs(cfg.get('os_envs'))
-    cfg.override_name = U.hydra_override_name(cfg)
 
     override_loggers(cfg.get('log_level', 'info'))
     seed = U.set_seed_everywhere(

@@ -1,0 +1,31 @@
+lr: 0.1
+num_gpus: 4
+batch_size: 32
+run_name: myrun
+debug: true
+
+sys:
+  time: 1
+  desc: system info
+  count: 3
+  carrier: ups
+
+log:
+  file: hello.txt
+  freq: 3
+  fry: no
+
+
+omlet:
+  shorthand:
+    run_name: r
+    batch_size: bs
+    num_gpus: g
+
+  override_name:
+    kv_sep: +
+    item_sep: _
+    use_shorthand: false
+    include_keys: ['lr', 'batch_size', 'num_gpus', 'sys.c*']
+    exclude_keys: ['sys.*', 'log.f??', 'run']
+
