@@ -1,4 +1,4 @@
-# OMLET: Open Machine Learning Engineering Toolkit
+# OMLET: Open Machine Learning Engineering Toolbox
 
 Development in progress
 

@@ -13,7 +13,7 @@ pkg_name = 'omlet'
 
 setup(
     name=pkg_name,
-    version='0.0.1a',
+    version='0.1',
     author='Lab',
     # url='http://github.com/',
     description='research project',
